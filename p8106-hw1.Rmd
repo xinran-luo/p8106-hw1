@@ -1,0 +1,92 @@
+---
+title: "p8106-hw1"
+author: "xinran"
+date: "2/25/2020"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+library(boot)
+library(ISLR)
+library(glmnet)
+library(corrplot)
+library(plotmo)
+library(pls)
+```
+
+# Import data
+```{r}
+train_data = read.csv("./data/solubility_train.csv") %>% 
+  janitor::clean_names()
+test_data = read.csv("./data/solubility_test.csv") %>% 
+  janitor::clean_names()
+```
+
+# (a) Fit a linear model using least squares on the training data and calculate the mean square error using the test data.
+
+## Fit linear model on the training data
+```{r}
+fit_lm_tr = lm(solubility ~ .， data = train_data)
+summary(fit_lm_tr)
+```
+
+## Calculate the mean square error using the test data
+```{r}
+pred_lm_tr = predict(fit_lm_tr, test_data)
+mse_test = mean((pred_lm_tr - test_data$solubility)^2);mse_test
+```
+
+# (b) Fit a ridge regression model on the training data, with λ chosen by cross-validation. Report the test error
+```{r}
+set.seed(1)
+train_data = na.omit(train_data)
+x = model.matrix(solubility ~ ., train_data)[, -1]
+y = train_data$solubility
+ridge_mod = glmnet(x, y, alpha = 0, lambda = exp(seq(-5, 5, length = 500)))
+mat_coef = coef(ridge_mod)
+dim(mat_coef)
+# Cross-validation
+cv_ridge = cv.glmnet(x, y,
+                     alpha = 0,
+                     lambda = exp(seq(-5, 5, length = 500)),
+                     type.measure = "mse")
+plot(cv_ridge)
+# Trace plot
+plot_glmnet(ridge_mod, xvar = "rlambda")
+# Predict response in final model
+best_lambda = cv_ridge$lambda.min; best_lambda
+pred_resp_ridge = predict(ridge_mod, newx = model.matrix(solubility ~ ., test_data)[, -1], s = best_lambda, type = "response"); pred_resp_ridge
+# MSE
+mse_ridge = mean((pred_resp_ridge - test_data$solubility)^2); mse_ridge
+```
+
+Based on the result, the MSE for ridge regression is `r mse_ridge`.
+
+# (c) Fit a lasso model on the training data, with λ chosen by cross-validation. Report the test error, along with the number of non-zero coefficient estimates.
+
+```{r}
+set.seed(1)
+cv_lasso = cv.glmnet(x, y, alpha = 1, lambda = exp(seq(-8, -1, length = 500)))
+# Cross-validation
+plot(cv_lasso)
+cv_lasso$lambda.min
+# Trace plot
+plot_glmnet(cv_lasso$glmnet.fit)
+# Predict response in the final model
+pred_resp_lasso = predict(cv_lasso, newx = model.matrix(solubility ~ ., test_data)[, -1], s = cv_lasso$lambda.min, type = "response"); pred_resp_lasso
+# MSE
+mse_lasso = mean((pred_resp_lasso - test_data$solubility)^2); mse_lasso
+# Number of non-zero coefficient estimates
+dim(as.matrix(predict(cv_lasso, s = "lambda.min", type = "coefficients")@x))
+```
+
+Thus, we know the MSE for lasso model is `r mse_lasso`, and the number of non-zero coefficient estimates is 144.
+
+# (d) Fit a principle component regression model on the training data, with M chosen by cross-validation. Report the test error, along with the value of M selected by cross-validation.
+
+# (e) Briefly discuss the results obtained in (a)∼(d).
+
+# (f) Which model will you choose for predicting solubility?
