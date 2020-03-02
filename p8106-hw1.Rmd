@@ -71,7 +71,7 @@ pred_resp_ridge = predict(ridge_mod, newx = model.matrix(solubility ~ ., test_da
 # MSE
 mse_ridge=mse(test_data$solubility, pred_resp_ridge)
 ```
-Based on the result, the MSE for ridge regression is `r mse_ridge`.
+Based on the result, the MSE for ridge regression is `r mse_ridge`. The lambda chosen by cross vadalition is `r best_lambda`.
 
 # (c) Fit a lasso model on the training data, with λ chosen by cross-validation. Report the test error, along with the number of non-zero coefficient estimates.
 
@@ -95,7 +95,7 @@ mse_lasso=mse(test_data$solubility, pred_resp_lasso)
 dim(as.matrix(predict(cv_lasso, s = "lambda.min", type = "coefficients")@x))
 ```
 
-Thus, we know the MSE for lasso model is `r mse_lasso`, and the number of non-zero coefficient estimates is 142.
+Thus, we know the MSE for lasso model is `r mse_lasso`, and the number of non-zero coefficient estimates is 142. The lambda chosen by cross validation is `r cv_lasso$lambda.min`.
 
 # (d) Fit a principle component regression model on the training data, with M chosen by cross-validation. Report the test error, along with the value of M selected by cross-validation.
 
@@ -125,10 +125,14 @@ cbind(c("Model", "LS", "Ridge", "Lasso", "PCR"), c("MSE", mse_test, mse_ridge, m
 ```
 In linear models, the least square estiments are used to generate the best linear unbiased estimators. Other than linear models, one may consider estimators with some bias but much smaller variance. 
 
-Ridge models improve over least squares because as lamda increases, although bias increases, variance decreases.
+Ridge models improve over least squares because as lamda increases, although bias increases, variance decreases.In the dataset `solubility`, the MSE of the ridge model is smaller than that of the linear model. 
 
-lasso model：shrink the number of non-zero coefficients to 142. 
+While the ridge model includes all the predictors, the lasso model shrinks some of the coefficient estimates towards zero, with 142 non-zero coefficients left. 
+
 principle component regression:PCR model shrinks the number of predictors to 150.
+
+Comparison of MSE:LS>PCR>ridge>lasso
+
 
 # (f) Which model will you choose for predicting solubility?
 
