@@ -15,6 +15,7 @@ library(glmnet)
 library(corrplot)
 library(plotmo)
 library(pls)
+library(ModelMetrics)
 ```
 
 # Import data
@@ -30,13 +31,13 @@ test_data = read.csv("./data/solubility_test.csv") %>%
 ## Fit linear model on the training data
 ```{r}
 fit_lm_tr = lm(solubility ~ .， data = train_data)
-summary(fit_lm_tr)
+sm=summary(fit_lm_tr)
 ```
 
 ## Calculate the mean square error using the test data
 ```{r}
 pred_lm_tr = predict(fit_lm_tr, test_data)
-mse_test = mean((pred_lm_tr - test_data$solubility)^2);mse_test
+mse_test = mean((pred_lm_tr - test_data$solubility)^2);
 ```
 
 # (b) Fit a ridge regression model on the training data, with λ chosen by cross-validation. Report the test error
@@ -45,24 +46,31 @@ set.seed(1)
 train_data = na.omit(train_data)
 x = model.matrix(solubility ~ ., train_data)[, -1]
 y = train_data$solubility
-ridge_mod = glmnet(x, y, alpha = 0, lambda = exp(seq(-5, 5, length = 500)))
+
+ridge_mod = glmnet(x, y, standardize= T, 
+                   alpha = 0, 
+                   lambda = exp(seq(-5, 5, length = 500)))
 mat_coef = coef(ridge_mod)
 dim(mat_coef)
-# Cross-validation
-cv_ridge = cv.glmnet(x, y,
-                     alpha = 0,
-                     lambda = exp(seq(-5, 5, length = 500)),
-                     type.measure = "mse")
-plot(cv_ridge)
-# Trace plot
-plot_glmnet(ridge_mod, xvar = "rlambda")
-# Predict response in final model
-best_lambda = cv_ridge$lambda.min; best_lambda
-pred_resp_ridge = predict(ridge_mod, newx = model.matrix(solubility ~ ., test_data)[, -1], s = best_lambda, type = "response"); pred_resp_ridge
-# MSE
-mse_ridge = mean((pred_resp_ridge - test_data$solubility)^2); mse_ridge
-```
 
+# Cross-validation
+cv_ridge = cv.glmnet(x, y,type.measure = "mse",
+                     alpha = 0,
+                     lambda = exp(seq(-5, 5, length = 500)))
+plot(cv_ridge)
+
+# Trace plot
+plot_glmnet(ridge_mod, xvar = "rlambda",label=10)
+
+# Coefficients of the final model
+best_lambda = cv_ridge$lambda.min
+best_lambda
+
+pred_resp_ridge = predict(ridge_mod, newx = model.matrix(solubility ~ ., test_data)[, -1], s = best_lambda, type = "response"); pred_resp_ridge
+
+# MSE
+mse_ridge=mse(test_data$solubility, pred_resp_ridge)
+```
 Based on the result, the MSE for ridge regression is `r mse_ridge`.
 
 # (c) Fit a lasso model on the training data, with λ chosen by cross-validation. Report the test error, along with the number of non-zero coefficient estimates.
@@ -70,23 +78,58 @@ Based on the result, the MSE for ridge regression is `r mse_ridge`.
 ```{r}
 set.seed(1)
 cv_lasso = cv.glmnet(x, y, alpha = 1, lambda = exp(seq(-8, -1, length = 500)))
+
 # Cross-validation
 plot(cv_lasso)
 cv_lasso$lambda.min
+
 # Trace plot
 plot_glmnet(cv_lasso$glmnet.fit)
+
 # Predict response in the final model
-pred_resp_lasso = predict(cv_lasso, newx = model.matrix(solubility ~ ., test_data)[, -1], s = cv_lasso$lambda.min, type = "response"); pred_resp_lasso
+pred_resp_lasso=predict(cv_lasso,newx = model.matrix(solubility ~ ., test_data)[, -1],s = cv_lasso$lambda.min, type = "response")
+
 # MSE
-mse_lasso = mean((pred_resp_lasso - test_data$solubility)^2); mse_lasso
+mse_lasso=mse(test_data$solubility, pred_resp_lasso)
 # Number of non-zero coefficient estimates
 dim(as.matrix(predict(cv_lasso, s = "lambda.min", type = "coefficients")@x))
 ```
 
-Thus, we know the MSE for lasso model is `r mse_lasso`, and the number of non-zero coefficient estimates is 144.
+Thus, we know the MSE for lasso model is `r mse_lasso`, and the number of non-zero coefficient estimates is 142.
 
 # (d) Fit a principle component regression model on the training data, with M chosen by cross-validation. Report the test error, along with the value of M selected by cross-validation.
 
+## Fit PCR model on training data
+```{r}
+set.seed(1)
+pcr_mod = pcr(solubility ~ .,
+              data = train_data，
+              scale = T,
+              validation = "CV")
+summary(pcr_mod)
+# Validation plot
+validationplot(pcr_mod, val.type = "MSEP", legendpos = "topright")
+# MSE (choose M = 150 based on the model result for smallest CV error)
+pred_resp_pcr = predict(pcr_mod, newdata = test_data, ncomp = 150); pred_resp_pcr
+mse_pcr=mse(test_data$solubility, pred_resp_pcr)
+```
+
+
+Thus, the mean square error for pcr model is `r mse_pcr`, along with M = 150 which was selected based on its smallest CV error.
+
 # (e) Briefly discuss the results obtained in (a)∼(d).
 
+```{r}
+cbind(c("Model", "LS", "Ridge", "Lasso", "PCR"), c("MSE", mse_test, mse_ridge, mse_lasso, mse_pcr)) %>% 
+  knitr::kable()
+```
+In linear models, the least square estiments are used to generate the best linear unbiased estimators. Other than linear models, one may consider estimators with some bias but much smaller variance. 
+
+Ridge models improve over least squares because as lamda increases, although bias increases, variance decreases.
+
+lasso model：shrink the number of non-zero coefficients to 142. 
+principle component regression:PCR model shrinks the number of predictors to 150.
+
 # (f) Which model will you choose for predicting solubility?
+
+Comparing the values of MSE, I will choose Lasso model because it has the smallest MSE.
